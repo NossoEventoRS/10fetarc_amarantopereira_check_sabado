@@ -298,9 +298,14 @@ function montarAbas(){
 function carregarDados(mostrarLoading){
     const statusEl = document.getElementById("status-conexao");
     if (mostrarLoading) statusEl.innerText = "Carregando dados...";
-    fetch(URL_API)
+
+    const controle = new AbortController();
+    const tempoLimite = setTimeout(() => controle.abort(), 12000); // não trava esperando pra sempre
+
+    fetch(URL_API, { signal: controle.signal })
         .then(r => r.json())
         .then(resp => {
+            clearTimeout(tempoLimite);
             dadosGlobais = resp;
             statusEl.classList.remove("erro");
             const agora = new Date();
@@ -308,8 +313,11 @@ function carregarDados(mostrarLoading){
             renderizarLista();
         })
         .catch(err => {
+            clearTimeout(tempoLimite);
             statusEl.classList.add("erro");
-            statusEl.innerText = "Falha ao carregar dados. Verifique a internet.";
+            statusEl.innerText = (err.name === "AbortError")
+                ? "Google demorou pra responder — tentando de novo..."
+                : "Falha ao carregar dados. Verifique a internet.";
             console.error(err);
         });
 }
@@ -376,6 +384,7 @@ function renderizarLista(){
 
         const div = document.createElement("div");
         div.className = "item st-" + cls;
+        div.dataset.row = l._row;
         div.innerHTML = `
             <div class="item-info">
                 <div class="item-nome">${ordem ? ordem + " · " : ""}${nomePrincipal}</div>
@@ -386,6 +395,21 @@ function renderizarLista(){
         div.onclick = () => abrirDetalhe(l);
         lista.appendChild(div);
     });
+}
+
+// Atualiza só o card de UM item na lista (sem redesenhar a lista inteira).
+// Muito mais rápido que renderizarLista() em abas com muitas linhas.
+// Se o item não estiver na tela no momento (ex: foi filtrado pela busca),
+// cai de volta pro renderizarLista() completo.
+function atualizarItemVisual(item){
+    const el = document.querySelector('.item[data-row="' + item._row + '"]');
+    if (!el){ renderizarLista(); return; }
+    const status = pegar(item, ["Status"]);
+    const cls = classeStatus(status);
+    el.className = "item st-" + cls;
+    const badge = el.querySelector(".item-badge");
+    badge.className = "item-badge badge-" + (cls || "aguardando");
+    badge.textContent = status || "—";
 }
 
 document.getElementById("busca").addEventListener("input", renderizarLista);
@@ -469,8 +493,18 @@ function fecharModal(){
 }
 
 // ---------- ENVIAR ATUALIZAÇÃO ----------
+// Atualização OTIMISTA: a tela muda na hora (fecha modal, recolore o item),
+// sem esperar o Apps Script responder — que pode levar alguns segundos.
+// A gravação acontece por trás; se falhar, desfaz e avisa.
 function enviarAtualizacao(aba, linhas, novoStatus, itemLocal, aoTerminar){
+    const statusAnterior = itemLocal ? itemLocal.Status : null;
+
+    // aplica na hora, na interface
+    if (itemLocal) itemLocal.Status = novoStatus;
+    if (aoTerminar) aoTerminar(); else fecharModal();
+    if (itemLocal) atualizarItemVisual(itemLocal); else renderizarLista();
     mostrarToast("Salvando...");
+
     fetch(URL_API, {
         method: "POST",
         headers: { "Content-Type": "text/plain;charset=utf-8" }, // evita preflight CORS
@@ -480,16 +514,17 @@ function enviarAtualizacao(aba, linhas, novoStatus, itemLocal, aoTerminar){
     .then(resp => {
         if (resp.ok){
             mostrarToast("Status atualizado ✓");
-            if (itemLocal) itemLocal.Status = novoStatus;
-            if (aoTerminar) aoTerminar(); else fecharModal();
-            renderizarLista();
         } else {
+            if (itemLocal) itemLocal.Status = statusAnterior;
+            if (itemLocal) atualizarItemVisual(itemLocal); else renderizarLista();
             mostrarToast("Erro: " + (resp.error || "não foi possível salvar"));
         }
     })
     .catch(err => {
         console.error(err);
-        mostrarToast("Falha de conexão ao salvar");
+        if (itemLocal) itemLocal.Status = statusAnterior;
+        if (itemLocal) atualizarItemVisual(itemLocal); else renderizarLista();
+        mostrarToast("Falha de conexão — não salvou, tente de novo");
     });
 }
 
