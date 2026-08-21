@@ -413,11 +413,13 @@ function renderizarLista(){
         const cls = classeStatus(status);
         const ordem = pegar(l, ["Ordem"]);
         const entidade = pegar(l, ["Entidade"]);
+        const categoria = pegar(l, ["Categoria"]);
         let nomePrincipal;
         if (ehGrupo()) nomePrincipal = entidade;
         else if (ehDancaPar()) nomePrincipal = `${pegar(l,["NomePrenda"])} & ${pegar(l,["NomePeao"])}`;
         else nomePrincipal = pegar(l, ["Nomes","Nome","Concorrente"]);
-        const subtitulo = ehGrupo() ? `${pegar(l,["Integrantes"])} integrantes` : entidade;
+        const infoBase = ehGrupo() ? `${pegar(l,["Integrantes"])} integrantes` : entidade;
+        const subtitulo = categoria ? `${categoria} · ${infoBase}` : infoBase;
 
         const div = document.createElement("div");
         div.className = "item st-" + cls;
