@@ -140,14 +140,46 @@ body.logado #tela-login{ display:none; }
     border:none; border-radius:8px; font-weight:bold; cursor:pointer;
 }
 #lista-integrantes{ margin-top:14px; border-top:2px solid #f0f0f0; padding-top:10px; }
-.integrante-row{
-    display:flex; align-items:center; justify-content:space-between; gap:8px;
-    padding:8px 0; border-bottom:1px solid #f5f5f5; font-size:12px;
-}
+.integrante-row{ padding:8px 0; border-bottom:1px solid #f5f5f5; font-size:12px; }
 .integrante-row .nome{ font-weight:bold; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .mini-botoes{ display:flex; gap:4px; flex-shrink:0; }
 .mini-botoes button{ width:26px; height:26px; border-radius:50%; border:2px solid #fff; cursor:pointer; }
 .mini-botoes button.ativo{ border-color:var(--preto); }
+
+/* ---------- EDIÇÃO/EXCLUSÃO DE INTEGRANTE (aba Grupo) ---------- */
+.integrante-view{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.integrante-view .item-info{ min-width:0; }
+.mini-acoes{ display:flex; gap:4px; flex-shrink:0; }
+.mini-acoes button{
+    border:1px solid #eee; background:#f7f7f7; border-radius:6px;
+    padding:5px 8px; font-size:13px; cursor:pointer; line-height:1;
+}
+.bt-excluir-integrante{ background:#fee2e2; border-color:#fecaca; }
+.integrante-edit{ display:none; flex-direction:column; gap:6px; padding-top:8px; }
+.integrante-edit input{
+    padding:9px; font-size:12px; border:1px solid #ddd; border-radius:6px; width:100%;
+}
+.integrante-edit input:focus{ border-color:var(--laranja-escuro); outline:none; }
+.edit-botoes{ display:flex; gap:6px; margin-top:2px; }
+.edit-botoes button{
+    flex:1; padding:9px; border:none; border-radius:6px; font-size:12px;
+    font-weight:bold; cursor:pointer;
+}
+.bt-salvar-integrante{ background:var(--verde); color:#fff; }
+.bt-cancelar-integrante{ background:#eee; color:#333; }
+
+/* ---------- EDIÇÃO/EXCLUSÃO DE ITEM INTEIRO (demais abas) ---------- */
+#corpo-edit{ margin-top:8px; }
+.campo-edit{ display:flex; flex-direction:column; gap:4px; margin-bottom:10px; font-size:12px; }
+.campo-edit label{ font-weight:bold; color:#555; font-size:11px; text-transform:uppercase; letter-spacing:.3px; }
+.campo-edit input{ padding:9px; border:1px solid #ddd; border-radius:6px; font-size:13px; width:100%; }
+.campo-edit input:focus{ border-color:var(--laranja-escuro); outline:none; }
+.acoes-item{ display:flex; gap:8px; margin-top:12px; }
+.acoes-item button{
+    flex:1; padding:11px; border-radius:8px; border:1px solid #eee;
+    background:#f7f7f7; font-size:12px; font-weight:bold; cursor:pointer;
+}
+.acoes-item .bt-excluir-item-btn{ background:#fee2e2; border-color:#fecaca; color:#7f1d1d; }
 
 #toast{
     position:fixed; bottom:20px; left:50%; transform:translateX(-50%) translateY(100px);
@@ -254,6 +286,12 @@ document.getElementById("btn-sair").addEventListener("click", function(){
 // ---------- UTIL ----------
 function normalizar(txt){
     return String(txt || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+function esc(s){
+    return String(s == null ? "" : s)
+        .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+        .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
 }
 
 function pegar(obj, nomes){
@@ -418,13 +456,188 @@ function listaIntegrantesHtml(item){
     const membros = item.IntegrantesLista || [];
     if (membros.length === 0) return "";
     return membros.map(m => `
-        <div class="integrante-row">
-            <div class="nome">${m.Nome || ""}</div>
-            <div style="font-size:11px; color:#777; text-align:right; flex-shrink:0;">
-                ${m.Cartao ? "Cartão " + m.Cartao : ""}${m.Nascimento ? " · " + m.Nascimento : ""}${m.Municipio ? " · " + m.Municipio : ""}
+        <div class="integrante-row" data-row="${m._row}">
+            <div class="integrante-view">
+                <div class="item-info">
+                    <div class="nome">${esc(m.Nome)}</div>
+                    <div style="font-size:11px; color:#777;">
+                        ${m.Cartao ? "Cartão " + esc(m.Cartao) : ""}${m.Nascimento ? " · " + esc(m.Nascimento) : ""}${m.Municipio ? " · " + esc(m.Municipio) : ""}
+                    </div>
+                </div>
+                <div class="mini-acoes">
+                    <button class="bt-editar-integrante" type="button" title="Editar">✏️</button>
+                    <button class="bt-excluir-integrante" type="button" title="Excluir">🗑️</button>
+                </div>
+            </div>
+            <div class="integrante-edit">
+                <input class="in-nome" value="${esc(m.Nome)}" placeholder="Nome">
+                <input class="in-cartao" value="${esc(m.Cartao)}" placeholder="Cartão">
+                <input class="in-nascimento" value="${esc(m.Nascimento)}" placeholder="Nascimento (dd/mm/aaaa)">
+                <input class="in-municipio" value="${esc(m.Municipio)}" placeholder="Município">
+                <div class="edit-botoes">
+                    <button class="bt-salvar-integrante" type="button">Salvar</button>
+                    <button class="bt-cancelar-integrante" type="button">Cancelar</button>
+                </div>
             </div>
         </div>
     `).join("");
+}
+
+// Liga os botões de editar/excluir/salvar/cancelar de cada integrante
+// listado no modal de detalhe (só existe quando a aba ativa é "Grupo").
+function ativarAcoesIntegrantes(){
+    document.querySelectorAll('#lista-integrantes .integrante-row').forEach(linha => {
+        const rowNum = linha.dataset.row;
+        const view = linha.querySelector('.integrante-view');
+        const edit = linha.querySelector('.integrante-edit');
+
+        linha.querySelector('.bt-editar-integrante').onclick = () => {
+            view.style.display = 'none';
+            edit.style.display = 'flex';
+        };
+        linha.querySelector('.bt-cancelar-integrante').onclick = () => {
+            edit.style.display = 'none';
+            view.style.display = 'flex';
+        };
+        linha.querySelector('.bt-salvar-integrante').onclick = () => {
+            const campos = {
+                Nome: linha.querySelector('.in-nome').value.trim(),
+                Cartao: linha.querySelector('.in-cartao').value.trim(),
+                Nascimento: linha.querySelector('.in-nascimento').value.trim(),
+                Municipio: linha.querySelector('.in-municipio').value.trim()
+            };
+            if (!campos.Nome){
+                mostrarToast("O nome não pode ficar vazio");
+                return;
+            }
+            salvarIntegrante(rowNum, campos);
+        };
+        linha.querySelector('.bt-excluir-integrante').onclick = () => {
+            const nome = linha.querySelector('.in-nome').value || "este integrante";
+            if (confirm(`Excluir "${nome}" deste grupo? Essa ação não pode ser desfeita.`)){
+                excluirIntegranteRemoto(rowNum);
+            }
+        };
+    });
+}
+
+function salvarIntegrante(row, campos){
+    mostrarToast("Salvando...");
+    fetch(URL_API, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ acao: "editarIntegrante", row: Number(row), campos })
+    })
+    .then(r => r.json())
+    .then(resp => {
+        if (resp.ok){
+            mostrarToast("Integrante atualizado ✓");
+            fecharModal();
+            carregarDados(false);
+        } else {
+            mostrarToast("Erro: " + (resp.error || "não foi possível salvar"));
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        mostrarToast("Falha de conexão — não salvou, tente de novo");
+    });
+}
+
+function excluirIntegranteRemoto(row){
+    mostrarToast("Excluindo...");
+    fetch(URL_API, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ acao: "excluirIntegrante", row: Number(row) })
+    })
+    .then(r => r.json())
+    .then(resp => {
+        if (resp.ok){
+            mostrarToast("Integrante excluído ✓");
+            fecharModal();
+            carregarDados(false);
+        } else {
+            mostrarToast("Erro: " + (resp.error || "não foi possível excluir"));
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        mostrarToast("Falha de conexão — não excluiu, tente de novo");
+    });
+}
+
+// ---------- EDITAR/EXCLUIR ITEM INTEIRO (Declamação, Intérprete, Dança PAR) ----------
+function salvarItem(aba, row, campos){
+    mostrarToast("Salvando...");
+    fetch(URL_API, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ acao: "editarItem", aba, row: Number(row), campos })
+    })
+    .then(r => r.json())
+    .then(resp => {
+        if (resp.ok){
+            mostrarToast("Dados atualizados ✓");
+            fecharModal();
+            carregarDados(false);
+        } else {
+            mostrarToast("Erro: " + (resp.error || "não foi possível salvar"));
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        mostrarToast("Falha de conexão — não salvou, tente de novo");
+    });
+}
+
+function excluirItemRemoto(aba, row){
+    mostrarToast("Excluindo...");
+    fetch(URL_API, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ acao: "excluirItem", aba, row: Number(row) })
+    })
+    .then(r => r.json())
+    .then(resp => {
+        if (resp.ok){
+            mostrarToast("Excluído ✓");
+            fecharModal();
+            carregarDados(false);
+        } else {
+            mostrarToast("Erro: " + (resp.error || "não foi possível excluir"));
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        mostrarToast("Falha de conexão — não excluiu, tente de novo");
+    });
+}
+
+// Monta os inputs de edição do item inteiro (Declamação, Intérprete e
+// Dança PAR — a aba Grupo edita cada integrante à parte, não o item todo).
+function corpoEditHtml(item, dancaPar){
+    if (dancaPar){
+        return `
+            <div class="campo-edit"><label>Entidade</label><input id="ed-entidade" value="${esc(pegar(item,["Entidade"]))}"></div>
+            <div class="campo-edit"><label>Município</label><input id="ed-municipio" value="${esc(pegar(item,["Municipio","Município"]))}"></div>
+            <div class="campo-edit"><label>RT</label><input id="ed-rt" value="${esc(pegar(item,["RT"]))}"></div>
+            <div class="campo-edit"><label>Nome da Prenda</label><input id="ed-nomeprenda" value="${esc(pegar(item,["NomePrenda"]))}"></div>
+            <div class="campo-edit"><label>Cartão Prenda</label><input id="ed-cartaoprenda" value="${esc(pegar(item,["CartaoPrenda"]))}"></div>
+            <div class="campo-edit"><label>Nascimento Prenda</label><input id="ed-nascprenda" value="${esc(pegar(item,["NascimentoPrenda"]))}" placeholder="dd/mm/aaaa"></div>
+            <div class="campo-edit"><label>Nome do Peão</label><input id="ed-nomepeao" value="${esc(pegar(item,["NomePeao"]))}"></div>
+            <div class="campo-edit"><label>Cartão Peão</label><input id="ed-cartaopeao" value="${esc(pegar(item,["CartaoPeao"]))}"></div>
+            <div class="campo-edit"><label>Nascimento Peão</label><input id="ed-nascpeao" value="${esc(pegar(item,["NascimentoPeao"]))}" placeholder="dd/mm/aaaa"></div>
+        `;
+    }
+    return `
+        <div class="campo-edit"><label>Nome</label><input id="ed-nome" value="${esc(pegar(item,["Nomes","Nome","Concorrente"]))}"></div>
+        <div class="campo-edit"><label>Entidade</label><input id="ed-entidade" value="${esc(pegar(item,["Entidade"]))}"></div>
+        <div class="campo-edit"><label>Cartão</label><input id="ed-cartao" value="${esc(pegar(item,["Cartão","Cartao"]))}"></div>
+        <div class="campo-edit"><label>Nascimento</label><input id="ed-nascimento" value="${esc(pegar(item,["Nascimento"]))}" placeholder="dd/mm/aaaa"></div>
+        <div class="campo-edit"><label>Município</label><input id="ed-municipio" value="${esc(pegar(item,["Municipio","Município"]))}"></div>
+        <div class="campo-edit"><label>RT</label><input id="ed-rt" value="${esc(pegar(item,["RT"]))}"></div>
+    `;
 }
 
 function abrirDetalhe(item){
@@ -469,14 +682,32 @@ function abrirDetalhe(item){
     }
 
     const modal = document.getElementById("modal");
+    const corpoEdit = !grupo ? `
+        <div id="corpo-edit" style="display:none;">
+            ${corpoEditHtml(item, dancaPar)}
+            <div class="edit-botoes">
+                <button id="bt-salvar-item" type="button" class="bt-salvar-integrante">Salvar</button>
+                <button id="bt-cancelar-item" type="button" class="bt-cancelar-integrante">Cancelar</button>
+            </div>
+        </div>
+    ` : "";
+    const acoesItem = !grupo ? `
+        <div class="acoes-item">
+            <button id="bt-editar-item" type="button">✏️ Editar informações</button>
+            <button id="bt-excluir-item" type="button" class="bt-excluir-item-btn">🗑️ Excluir</button>
+        </div>
+    ` : "";
+
     modal.innerHTML = `
         <h2>${titulo}</h2>
         <div class="sub">${pegar(item,["Categoria"])} · Ordem ${pegar(item,["Ordem"]) || "-"}</div>
-        ${corpo}
+        <div id="corpo-view">${corpo}</div>
+        ${corpoEdit}
         <div class="botoes-status">
             <button class="bt-npresente ${cls==='npresente'?'selecionado':''}" data-v="Não presente">Não presente</button>
             <button class="bt-aguardando ${cls==='aguardando'?'selecionado':''}" data-v="Check-in OK">Check-in</button>
         </div>
+        ${acoesItem}
         <button id="fechar-modal">Fechar</button>
     `;
     modal.querySelectorAll(".botoes-status button").forEach(btn => {
@@ -484,6 +715,61 @@ function abrirDetalhe(item){
     });
     document.getElementById("fechar-modal").onclick = fecharModal;
     document.getElementById("overlay").classList.add("aberto");
+
+    if (grupo) ativarAcoesIntegrantes();
+
+    if (!grupo){
+        const corpoViewEl = document.getElementById("corpo-view");
+        const corpoEditEl = document.getElementById("corpo-edit");
+
+        document.getElementById("bt-editar-item").onclick = () => {
+            corpoViewEl.style.display = "none";
+            corpoEditEl.style.display = "block";
+        };
+        document.getElementById("bt-cancelar-item").onclick = () => {
+            corpoEditEl.style.display = "none";
+            corpoViewEl.style.display = "block";
+        };
+        document.getElementById("bt-salvar-item").onclick = () => {
+            let campos;
+            if (dancaPar){
+                campos = {
+                    Entidade: document.getElementById("ed-entidade").value.trim(),
+                    Municipio: document.getElementById("ed-municipio").value.trim(),
+                    RT: document.getElementById("ed-rt").value.trim(),
+                    NomePrenda: document.getElementById("ed-nomeprenda").value.trim(),
+                    CartaoPrenda: document.getElementById("ed-cartaoprenda").value.trim(),
+                    NascimentoPrenda: document.getElementById("ed-nascprenda").value.trim(),
+                    NomePeao: document.getElementById("ed-nomepeao").value.trim(),
+                    CartaoPeao: document.getElementById("ed-cartaopeao").value.trim(),
+                    NascimentoPeao: document.getElementById("ed-nascpeao").value.trim()
+                };
+                if (!campos.NomePrenda && !campos.NomePeao){
+                    mostrarToast("Informe ao menos um nome");
+                    return;
+                }
+            } else {
+                campos = {
+                    Nome: document.getElementById("ed-nome").value.trim(),
+                    Entidade: document.getElementById("ed-entidade").value.trim(),
+                    Cartao: document.getElementById("ed-cartao").value.trim(),
+                    Nascimento: document.getElementById("ed-nascimento").value.trim(),
+                    Municipio: document.getElementById("ed-municipio").value.trim(),
+                    RT: document.getElementById("ed-rt").value.trim()
+                };
+                if (!campos.Nome){
+                    mostrarToast("O nome não pode ficar vazio");
+                    return;
+                }
+            }
+            salvarItem(nomeAba, item._row, campos);
+        };
+        document.getElementById("bt-excluir-item").onclick = () => {
+            if (confirm(`Excluir "${titulo}"? Essa ação não pode ser desfeita.`)){
+                excluirItemRemoto(nomeAba, item._row);
+            }
+        };
+    }
 }
 
 function fecharModal(){
