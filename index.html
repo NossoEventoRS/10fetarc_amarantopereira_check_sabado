@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Conferência de Cartão — Check-in | SABADO</title>
+<title>Conferência de Cartão — Check-in | DOMINGO</title>
 <style>
 :root{
     --laranja: #48db7e;
@@ -100,7 +100,8 @@ body.logado #tela-login{ display:none; }
 }
 .badge-npresente{ background:var(--vermelho); }
 .badge-aguardando{ background:var(--amarelo); color:#000; }
-.badge-concluido {background:var(--verde); }
+.badge-concluido{ background:var(--verde); }
+
 #vazio{ text-align:center; color:#a15c00; padding:40px 20px; font-size:14px; }
 
 /* ---------- LEGENDA ---------- */
@@ -206,7 +207,7 @@ body.logado #tela-login{ display:none; }
 <!-- ===================== APP ===================== -->
 <div id="app">
     <div id="header">
-        <div class="titulo">Conferência de Cartão | SÁBADO 22/08/2026
+        <div class="titulo">Conferência de Cartão | DOMINGO 23/08/2026
             <small>10ª FETARC | CTG Amaranto Pererita - 1ª RT - Alvorada / RS</small>
         </div>
         <button id="btn-sair">Sair</button>
@@ -242,15 +243,14 @@ body.logado #tela-login{ display:none; }
 
 // Mesma URL do Apps Script usada no painel.html (precisa aceitar POST também,
 // veja o código .gs fornecido junto com este arquivo).
-const URL_API = "https://script.google.com/macros/s/AKfycbwXelxU7JHk5Clra61BgFO6M4RoTi8zGfdToDwNm_B4SP5OLlBGtC5xUJPGegCSXQSZ/exec";
+const URL_API = "https://script.google.com/macros/s/AKfycbwL6-o_jAqK9gIlp-uuzcaIwkOYnxuZzCe3ERWdXcN6dpLNkVrZMb5AZGdvPL9eKFdpnQ/exec";
 
 // Senha única da equipe. Troque para a senha real do evento.
 const SENHA_ACESSO = "amaranto2026";
 
 // Abas do painel: "Rótulo mostrado" -> "Nome exato da aba na planilha Google".
 const MODALIDADES = {
-    "Declamação": "Declamação",
-    "Dança PAR": "Dança PAR",
+    "Intérprete": "Intérprete",
     "Grupo": "Grupo"
 };
 
@@ -335,14 +335,9 @@ function montarAbas(){
 function carregarDados(mostrarLoading){
     const statusEl = document.getElementById("status-conexao");
     if (mostrarLoading) statusEl.innerText = "Carregando dados...";
-
-    const controle = new AbortController();
-    const tempoLimite = setTimeout(() => controle.abort(), 12000); // não trava esperando pra sempre
-
-    fetch(URL_API, { signal: controle.signal })
+    fetch(URL_API)
         .then(r => r.json())
         .then(resp => {
-            clearTimeout(tempoLimite);
             dadosGlobais = resp;
             statusEl.classList.remove("erro");
             const agora = new Date();
@@ -350,11 +345,8 @@ function carregarDados(mostrarLoading){
             renderizarLista();
         })
         .catch(err => {
-            clearTimeout(tempoLimite);
             statusEl.classList.add("erro");
-            statusEl.innerText = (err.name === "AbortError")
-                ? "Google demorou pra responder — tentando de novo..."
-                : "Falha ao carregar dados. Verifique a internet.";
+            statusEl.innerText = "Falha ao carregar dados. Verifique a internet.";
             console.error(err);
         });
 }
@@ -372,24 +364,13 @@ function ehGrupo(){
     return normalizar(abaAtiva).includes("grupo");
 }
 
-// A aba "Dança PAR" vem com prenda e peão separados em campos próprios
-// (NomePrenda, NomePeao, CartaoPrenda, CartaoPeao, NascimentoPrenda,
-// NascimentoPeao, Musica), já tratados pelo Apps Script.
-function ehDancaPar(){
-    return normalizar(abaAtiva).includes("danca par");
-}
-
 // Junta todos os campos de texto relevantes do item num único texto
 // normalizado, pra busca funcionar em qualquer formato de aba.
 function textoBuscaItem(l){
     return normalizar([
         pegar(l, ["Nomes","Nome","Concorrente"]),
-        pegar(l, ["NomePrenda"]),
-        pegar(l, ["NomePeao"]),
         pegar(l, ["Entidade"]),
-        pegar(l, ["Cartão","Cartao"]),
-        pegar(l, ["CartaoPrenda"]),
-        pegar(l, ["CartaoPeao"])
+        pegar(l, ["Cartão","Cartao"])
     ].join(" "));
 }
 
@@ -416,7 +397,6 @@ function renderizarLista(){
         const categoria = pegar(l, ["Categoria"]);
         let nomePrincipal;
         if (ehGrupo()) nomePrincipal = entidade;
-        else if (ehDancaPar()) nomePrincipal = `${pegar(l,["NomePrenda"])} & ${pegar(l,["NomePeao"])}`;
         else nomePrincipal = pegar(l, ["Nomes","Nome","Concorrente"]);
         const infoBase = ehGrupo() ? `${pegar(l,["Integrantes"])} integrantes` : entidade;
         const subtitulo = categoria ? `${categoria} · ${infoBase}` : infoBase;
@@ -437,7 +417,7 @@ function renderizarLista(){
 }
 
 // Atualiza só o card de UM item na lista (sem redesenhar a lista inteira).
-// Muito mais rápido que renderizarLista() em abas com muitas linhas.
+// Muito mais rápido que renderizarLista() em abas com muitas linhas (ex: Intérprete).
 // Se o item não estiver na tela no momento (ex: foi filtrado pela busca),
 // cai de volta pro renderizarLista() completo.
 function atualizarItemVisual(item){
@@ -569,69 +549,9 @@ function excluirIntegranteRemoto(row){
     });
 }
 
-// ---------- EDITAR/EXCLUIR ITEM INTEIRO (Declamação, Intérprete, Dança PAR) ----------
-function salvarItem(aba, row, campos){
-    mostrarToast("Salvando...");
-    fetch(URL_API, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ acao: "editarItem", aba, row: Number(row), campos })
-    })
-    .then(r => r.json())
-    .then(resp => {
-        if (resp.ok){
-            mostrarToast("Dados atualizados ✓");
-            fecharModal();
-            carregarDados(false);
-        } else {
-            mostrarToast("Erro: " + (resp.error || "não foi possível salvar"));
-        }
-    })
-    .catch(err => {
-        console.error(err);
-        mostrarToast("Falha de conexão — não salvou, tente de novo");
-    });
-}
-
-function excluirItemRemoto(aba, row){
-    mostrarToast("Excluindo...");
-    fetch(URL_API, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ acao: "excluirItem", aba, row: Number(row) })
-    })
-    .then(r => r.json())
-    .then(resp => {
-        if (resp.ok){
-            mostrarToast("Excluído ✓");
-            fecharModal();
-            carregarDados(false);
-        } else {
-            mostrarToast("Erro: " + (resp.error || "não foi possível excluir"));
-        }
-    })
-    .catch(err => {
-        console.error(err);
-        mostrarToast("Falha de conexão — não excluiu, tente de novo");
-    });
-}
-
-// Monta os inputs de edição do item inteiro (Declamação, Intérprete e
-// Dança PAR — a aba Grupo edita cada integrante à parte, não o item todo).
-function corpoEditHtml(item, dancaPar){
-    if (dancaPar){
-        return `
-            <div class="campo-edit"><label>Entidade</label><input id="ed-entidade" value="${esc(pegar(item,["Entidade"]))}"></div>
-            <div class="campo-edit"><label>Município</label><input id="ed-municipio" value="${esc(pegar(item,["Municipio","Município"]))}"></div>
-            <div class="campo-edit"><label>RT</label><input id="ed-rt" value="${esc(pegar(item,["RT"]))}"></div>
-            <div class="campo-edit"><label>Nome da Prenda</label><input id="ed-nomeprenda" value="${esc(pegar(item,["NomePrenda"]))}"></div>
-            <div class="campo-edit"><label>Cartão Prenda</label><input id="ed-cartaoprenda" value="${esc(pegar(item,["CartaoPrenda"]))}"></div>
-            <div class="campo-edit"><label>Nascimento Prenda</label><input id="ed-nascprenda" value="${esc(pegar(item,["NascimentoPrenda"]))}" placeholder="dd/mm/aaaa"></div>
-            <div class="campo-edit"><label>Nome do Peão</label><input id="ed-nomepeao" value="${esc(pegar(item,["NomePeao"]))}"></div>
-            <div class="campo-edit"><label>Cartão Peão</label><input id="ed-cartaopeao" value="${esc(pegar(item,["CartaoPeao"]))}"></div>
-            <div class="campo-edit"><label>Nascimento Peão</label><input id="ed-nascpeao" value="${esc(pegar(item,["NascimentoPeao"]))}" placeholder="dd/mm/aaaa"></div>
-        `;
-    }
+// Monta os inputs de edição do item inteiro (Intérprete — a aba Grupo edita
+// cada integrante à parte, não o item todo).
+function corpoEditHtml(item){
     return `
         <div class="campo-edit"><label>Nome</label><input id="ed-nome" value="${esc(pegar(item,["Nomes","Nome","Concorrente"]))}"></div>
         <div class="campo-edit"><label>Entidade</label><input id="ed-entidade" value="${esc(pegar(item,["Entidade"]))}"></div>
@@ -648,7 +568,6 @@ function abrirDetalhe(item){
     const status = pegar(item, ["Status"]);
     const cls = classeStatus(status);
     const grupo = ehGrupo();
-    const dancaPar = ehDancaPar();
 
     let titulo, corpo;
 
@@ -657,20 +576,7 @@ function abrirDetalhe(item){
         corpo = `
             <div class="campo"><span>Integrantes</span><b>${pegar(item,["Integrantes"])}</b></div>
             <div class="campo"><span>RT</span><b>${pegar(item,["RT"])}</b></div>
-            <div class="campo"><span>Danças</span><b style="text-align:right;">${[pegar(item,["Danca_1"]),pegar(item,["Danca_2"]),pegar(item,["Danca_3"])].filter(Boolean).join(" · ")}</b></div>
             <div id="lista-integrantes"><div style="font-size:11px; font-weight:bold; color:#a15c00; text-transform:uppercase; margin-bottom:4px;">Integrantes</div>${listaIntegrantesHtml(item)}</div>
-        `;
-    } else if (dancaPar){
-        titulo = `${pegar(item,["NomePrenda"])} & ${pegar(item,["NomePeao"])}`;
-        corpo = `
-            <div class="campo"><span>Entidade</span><b>${pegar(item,["Entidade"])}</b></div>
-            <div class="campo"><span>Município</span><b>${pegar(item,["Municipio","Município"])}</b></div>
-            <div class="campo"><span>RT</span><b>${pegar(item,["RT"])}</b></div>
-            <div style="font-size:11px; font-weight:bold; color:#a15c00; text-transform:uppercase; margin:12px 0 4px;">Prenda</div>
-            <div class="campo"><span>${pegar(item,["NomePrenda"])}</span><b>Cartão ${pegar(item,["CartaoPrenda"]) || "-"} · ${pegar(item,["NascimentoPrenda"]) || "-"}</b></div>
-            <div style="font-size:11px; font-weight:bold; color:#a15c00; text-transform:uppercase; margin:12px 0 4px;">Peão</div>
-            <div class="campo"><span>${pegar(item,["NomePeao"])}</span><b>Cartão ${pegar(item,["CartaoPeao"]) || "-"} · ${pegar(item,["NascimentoPeao"]) || "-"}</b></div>
-            <div class="campo" style="margin-top:12px; background:#fff3e0; border-radius:6px; padding:8px;"><span>🎵 Dança</span><b>${pegar(item,["Musica","Música"]) || "-"}</b></div>
         `;
     } else {
         titulo = pegar(item,["Nomes","Nome","Concorrente"]);
@@ -686,7 +592,7 @@ function abrirDetalhe(item){
     const modal = document.getElementById("modal");
     const corpoEdit = !grupo ? `
         <div id="corpo-edit" style="display:none;">
-            ${corpoEditHtml(item, dancaPar)}
+            ${corpoEditHtml(item)}
             <div class="edit-botoes">
                 <button id="bt-salvar-item" type="button" class="bt-salvar-integrante">Salvar</button>
                 <button id="bt-cancelar-item" type="button" class="bt-cancelar-integrante">Cancelar</button>
@@ -733,36 +639,17 @@ function abrirDetalhe(item){
             corpoViewEl.style.display = "block";
         };
         document.getElementById("bt-salvar-item").onclick = () => {
-            let campos;
-            if (dancaPar){
-                campos = {
-                    Entidade: document.getElementById("ed-entidade").value.trim(),
-                    Municipio: document.getElementById("ed-municipio").value.trim(),
-                    RT: document.getElementById("ed-rt").value.trim(),
-                    NomePrenda: document.getElementById("ed-nomeprenda").value.trim(),
-                    CartaoPrenda: document.getElementById("ed-cartaoprenda").value.trim(),
-                    NascimentoPrenda: document.getElementById("ed-nascprenda").value.trim(),
-                    NomePeao: document.getElementById("ed-nomepeao").value.trim(),
-                    CartaoPeao: document.getElementById("ed-cartaopeao").value.trim(),
-                    NascimentoPeao: document.getElementById("ed-nascpeao").value.trim()
-                };
-                if (!campos.NomePrenda && !campos.NomePeao){
-                    mostrarToast("Informe ao menos um nome");
-                    return;
-                }
-            } else {
-                campos = {
-                    Nome: document.getElementById("ed-nome").value.trim(),
-                    Entidade: document.getElementById("ed-entidade").value.trim(),
-                    Cartao: document.getElementById("ed-cartao").value.trim(),
-                    Nascimento: document.getElementById("ed-nascimento").value.trim(),
-                    Municipio: document.getElementById("ed-municipio").value.trim(),
-                    RT: document.getElementById("ed-rt").value.trim()
-                };
-                if (!campos.Nome){
-                    mostrarToast("O nome não pode ficar vazio");
-                    return;
-                }
+            const campos = {
+                Nome: document.getElementById("ed-nome").value.trim(),
+                Entidade: document.getElementById("ed-entidade").value.trim(),
+                Cartao: document.getElementById("ed-cartao").value.trim(),
+                Nascimento: document.getElementById("ed-nascimento").value.trim(),
+                Municipio: document.getElementById("ed-municipio").value.trim(),
+                RT: document.getElementById("ed-rt").value.trim()
+            };
+            if (!campos.Nome){
+                mostrarToast("O nome não pode ficar vazio");
+                return;
             }
             salvarItem(nomeAba, item._row, campos);
         };
@@ -772,6 +659,53 @@ function abrirDetalhe(item){
             }
         };
     }
+}
+
+// ---------- EDITAR/EXCLUIR ITEM INTEIRO (Intérprete) ----------
+function salvarItem(aba, row, campos){
+    mostrarToast("Salvando...");
+    fetch(URL_API, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ acao: "editarItem", aba, row: Number(row), campos })
+    })
+    .then(r => r.json())
+    .then(resp => {
+        if (resp.ok){
+            mostrarToast("Dados atualizados ✓");
+            fecharModal();
+            carregarDados(false);
+        } else {
+            mostrarToast("Erro: " + (resp.error || "não foi possível salvar"));
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        mostrarToast("Falha de conexão — não salvou, tente de novo");
+    });
+}
+
+function excluirItemRemoto(aba, row){
+    mostrarToast("Excluindo...");
+    fetch(URL_API, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ acao: "excluirItem", aba, row: Number(row) })
+    })
+    .then(r => r.json())
+    .then(resp => {
+        if (resp.ok){
+            mostrarToast("Excluído ✓");
+            fecharModal();
+            carregarDados(false);
+        } else {
+            mostrarToast("Erro: " + (resp.error || "não foi possível excluir"));
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        mostrarToast("Falha de conexão — não excluiu, tente de novo");
+    });
 }
 
 function fecharModal(){
